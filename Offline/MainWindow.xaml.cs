@@ -9,10 +9,13 @@ using Esri.ArcGISRuntime.Tasks.Query;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace Offline
 {
@@ -67,7 +70,7 @@ namespace Offline
                 var bufferDist = mapUnitsPerPixel * 8;
                 var searchBuffer = GeometryEngine.Buffer(mapPoint, bufferDist);
 
-                if (OnlineCheckBox.IsChecked == true)
+                if (UseOnlineDataOption.IsChecked == true)
                 {
                     this.QueryOnline(mapOverlay, searchBuffer);
                 }
@@ -92,6 +95,7 @@ namespace Offline
             var query = new Query(searchArea);
             query.OutFields.Add("name");
             query.OutFields.Add("city");
+            query.OutFields.Add("pic");
             query.ReturnGeometry = true;
 
             // execute the query and check for a result
@@ -127,27 +131,39 @@ namespace Offline
 
         private async void GoOffline()
         {
-            this.MyMapView.Map.Layers.Clear();
-            var localTileLayer = new ArcGISLocalTiledLayer(this.LocalTilesPathTextBlock.Text);
-            await localTileLayer.InitializeAsync();
-            this.MyMapView.Map.Layers.Add(localTileLayer);
+            try
+            {
+                this.MyMapView.Map.Layers.Clear();
 
-            var localGdb = await Geodatabase.OpenAsync(this.LocalDataPathTextBlock.Text);
-            var localPoiTable = localGdb.FeatureTables.FirstOrDefault();
+                var assemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                var appPath = assemblyPath.Substring(0, assemblyPath.LastIndexOf("bin"));
+                var tilesPath = appPath + "\\" + this.LocalTilesPathTextBlock.Text;
 
-            var localPoiLayer = new FeatureLayer(localPoiTable);
-            localPoiLayer.ID = "POI";
-            localPoiLayer.DisplayName = localPoiTable.Name;
-            var flamePictureMarker = new PictureMarkerSymbol();
-            await flamePictureMarker.SetSourceAsync(new Uri(flameImageUrl));
-            flamePictureMarker.Height = 24;
-            flamePictureMarker.Width = 24;
-            var simpleRenderer = new SimpleRenderer();
-            simpleRenderer.Symbol = flamePictureMarker;
-            localPoiLayer.Renderer = simpleRenderer;
+                var localTileLayer = new ArcGISLocalTiledLayer(tilesPath);
+                await localTileLayer.InitializeAsync();
+                this.MyMapView.Map.Layers.Add(localTileLayer);
 
-            await localPoiLayer.InitializeAsync();
-            this.MyMapView.Map.Layers.Add(localPoiLayer);
+                var localGdb = await Geodatabase.OpenAsync(this.LocalDataPathTextBlock.Text);
+                var localPoiTable = localGdb.FeatureTables.FirstOrDefault();
+
+                var localPoiLayer = new FeatureLayer(localPoiTable);
+                localPoiLayer.ID = "POI";
+                localPoiLayer.DisplayName = localPoiTable.Name;
+                var flamePictureMarker = new PictureMarkerSymbol();
+                await flamePictureMarker.SetSourceAsync(new Uri(flameImageUrl));
+                flamePictureMarker.Height = 24;
+                flamePictureMarker.Width = 24;
+                var simpleRenderer = new SimpleRenderer();
+                simpleRenderer.Symbol = flamePictureMarker;
+                localPoiLayer.Renderer = simpleRenderer;
+
+                await localPoiLayer.InitializeAsync();
+                this.MyMapView.Map.Layers.Add(localPoiLayer);
+            }
+            catch (Exception exp)
+            {
+                SyncStatusTextBlock.Text = exp.Message;
+            }
         }
 
         private async void GetOnline()
@@ -160,12 +176,13 @@ namespace Offline
             onlineTiledServiceLayer.ID = "Basemap";
             await onlineTiledServiceLayer.InitializeAsync();
             this.MyMapView.Map.Layers.Add(onlineTiledServiceLayer);
-            
+
             // finally, add the online feature layer
             uri = new Uri(this.featureLayerServiceUrl);
             var onlineMarineLayer = new FeatureLayer(uri);
             onlineMarineLayer.ID = "POI";
             await onlineMarineLayer.InitializeAsync();
+
             this.MyMapView.Map.Layers.Add(onlineMarineLayer);
         }
 
@@ -175,7 +192,7 @@ namespace Offline
             // if unsuccessful, report the exception and return
             if (ex != null)
             {
-                this.Dispatcher.Invoke(() => this.GenerateGdbStatusTextBlock.Text = "An exception occured: " + ex.Message);
+                this.Dispatcher.Invoke(() => this.SyncStatusTextBlock.Text = "An exception occured: " + ex.Message);
                 return;
             }
 
@@ -198,8 +215,9 @@ namespace Offline
                     await gdbStream.Result.Content.CopyToAsync(stream);
                 }
                 this.Dispatcher.Invoke(() => this.LocalDataPathTextBlock.Text = geodatabasePath);
-                this.Dispatcher.Invoke(() => this.GenerateGdbProgressBar.Visibility = System.Windows.Visibility.Hidden);
-                this.Dispatcher.Invoke(() => this.StatusPanel.Visibility = System.Windows.Visibility.Collapsed);
+                this.Dispatcher.Invoke(() => this.SyncProgressBar.Visibility = System.Windows.Visibility.Hidden);
+                this.Dispatcher.Invoke(() => this.SyncStatusPanel.Visibility = System.Windows.Visibility.Collapsed);
+                this.Dispatcher.Invoke(() => this.UseLocalDataOption.IsEnabled = true);
             });
         }
 
@@ -238,16 +256,16 @@ namespace Offline
                 var progress = new Progress<GeodatabaseStatusInfo>();
                 progress.ProgressChanged += (s, info) =>
                 {
-                    this.GenerateGdbStatusTextBlock.Text = "Generate GDB: " + info.Status;
-                    this.GenerateGdbProgressBar.Visibility = System.Windows.Visibility.Visible;
+                    this.SyncStatusTextBlock.Text = "Generate GDB: " + info.Status;
+                    this.SyncProgressBar.Visibility = System.Windows.Visibility.Visible;
                 };
 
                 // call GenerateGeodatabaseAsync, pass in the parameters and the callback to execute when it's complete
-                this.GenerateGdbProgressBar.Visibility = System.Windows.Visibility.Visible;
-                this.GenerateGdbStatusTextBlock.Text = "Generate GDB: Job submitted ...";
-                
+                this.SyncProgressBar.Visibility = System.Windows.Visibility.Visible;
+                this.SyncStatusTextBlock.Text = "Generate GDB: Job submitted ...";
+
                 // show progress bar and label
-                this.StatusPanel.Visibility = System.Windows.Visibility.Visible;
+                this.SyncStatusPanel.Visibility = System.Windows.Visibility.Visible;
 
                 // generate the database
                 var gdbResult = await gdbTask.GenerateGeodatabaseAsync(gdbParams, GdbCompleteCallback, new TimeSpan(0, 0, 3), progress, cancelToken);
@@ -255,7 +273,7 @@ namespace Offline
             }
             catch (Exception ex)
             {
-                this.Dispatcher.Invoke(() => this.GenerateGdbStatusTextBlock.Text = "Unable to create offline database: " + ex.Message);
+                this.Dispatcher.Invoke(() => this.SyncStatusTextBlock.Text = "Unable to create offline database: " + ex.Message);
             }
         }
 
@@ -265,13 +283,140 @@ namespace Offline
             var newPoint = await editor.RequestPointAsync();
 
             var featureLayer = this.MyMapView.Map.Layers["POI"] as FeatureLayer;
-            var table = featureLayer.FeatureTable as GeodatabaseFeatureTable;
+            //Feature newFeature = null;
+            //if (featureLayer.FeatureTable.GetType() == typeof(GeodatabaseFeatureTable))
+            //{
+            //    var table = featureLayer.FeatureTable as GeodatabaseFeatureTable;
+            //    newFeature = new GeodatabaseFeature(table.Schema);
+            //}
+            //else if (featureLayer.FeatureTable.GetType() == typeof(ServiceFeatureTable)) 
+            //{
+            //    var table = featureLayer.FeatureTable as ServiceFeatureTable;
+            //    newFeature = table.CreateNew();
+            //}
 
-            var newFeature = new GeodatabaseFeature(table.Schema);
-            newFeature.Geometry = newPoint;
-            newFeature.Attributes["Name"] = this.NameTextBox.Text;
-            newFeature.Attributes["City"] = this.CityComboBox.SelectedItem.ToString();
-            var result = await table.AddAsync(newFeature);
+
+            //if (newFeature == null) { return; }
+            var attributes = new System.Collections.Generic.List<KeyValuePair<string, object>>();
+            attributes.Add(new KeyValuePair<string, object>("Name", ""));
+            attributes.Add(new KeyValuePair<string, object>("City", "Hollywood"));
+            attributes.Add(new KeyValuePair<string, object>("Pic", ""));
+
+            var fid = await featureLayer.FeatureTable.AddAsync(attributes, newPoint);
+            var newFeature = await featureLayer.FeatureTable.QueryAsync(fid);
+
+            //newFeature.Geometry = newPoint;
+            //newFeature.Attributes["Name"] = ""; 
+            //newFeature.Attributes["City"] = "Hollywood"; 
+            //newFeature.Attributes["Pic"] = "";
+
+            // get the map overlay element by name
+            var newSpotPopup = this.FindName("newSpotPopup") as FrameworkElement;
+
+            // verify that the overlay was found
+            if (newSpotPopup == null) { return; }
+
+            newSpotPopup.DataContext = newFeature;
+            newSpotPopup.Visibility = System.Windows.Visibility.Visible;
         }
+
+        private void DataOptionChecked(object sender, RoutedEventArgs e)
+        {
+            var opt = sender as RadioButton;
+            if (opt == null) { return; }
+
+            if (opt == this.UseOnlineDataOption)
+            {
+                this.GetOnline();
+            }
+            else
+            {
+                this.GoOffline();
+            }
+        }
+
+        private async void SyncEditsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var gdb = await Geodatabase.OpenAsync(this.LocalDataPathTextBlock.Text);
+
+            // create a new GeodatabaseSyncTask with the uri of the feature server to pull from
+            var serverUrl = this.featureLayerServiceUrl.Substring(0, this.featureLayerServiceUrl.LastIndexOf('/'));
+            var uri = new Uri(serverUrl);
+            var geodatabaseSyncTask = new GeodatabaseSyncTask(uri);
+
+            var geodatabaseSyncParams = new SyncGeodatabaseParameters();
+            geodatabaseSyncParams.SyncDirection = SyncDirection.Bidirectional;
+
+            var checkStatusInterval = new TimeSpan(0, 0, 3);
+
+            // Create a System.Progress<T> object to report status as the task executes
+            var progress = new Progress<GeodatabaseStatusInfo>();
+            progress.ProgressChanged += (s, info) =>
+            {
+                this.SyncStatusTextBlock.Text = "Sync edits: " + info.Status;
+            };
+
+            this.SyncStatusTextBlock.Text = "Starting sync ...";
+            this.SyncProgressBar.Visibility = System.Windows.Visibility.Visible;
+            this.SyncStatusPanel.Visibility = System.Windows.Visibility.Visible;
+            var result = await geodatabaseSyncTask.SyncGeodatabaseAsync(geodatabaseSyncParams, gdb, syncCompleteCallback, uploadCompleteCallback, checkStatusInterval, progress, new CancellationToken());
+        }
+
+        private void uploadCompleteCallback(Esri.ArcGISRuntime.Tasks.UploadResult result)
+        {
+            this.SyncStatusTextBlock.Text = (result.Success) ? "Upload of edits complete." : "Error uploading edits";
+        }
+
+        private void syncCompleteCallback(GeodatabaseStatusInfo info, Exception exp)
+        {
+            this.SyncProgressBar.Visibility = System.Windows.Visibility.Hidden;
+            if (exp != null)
+            {
+                this.SyncStatusTextBlock.Text = "Error synchronizing geodatabase: " + exp.Message;
+            }
+            else
+            {
+                this.SyncStatusTextBlock.Text = "Synchronization complete.";
+            }
+        }
+
+        private async void SaveNewSpotButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var button = sender as Button;
+                if (button == null) { return; }
+
+                var newFeature = button.DataContext as Feature;
+                if (newFeature == null) { return; }
+
+                var featureLayer = this.MyMapView.Map.Layers["POI"] as FeatureLayer;
+                var table = featureLayer.FeatureTable;
+                await table.UpdateAsync(newFeature);
+
+                if (featureLayer.FeatureTable.GetType() == typeof(ServiceFeatureTable))
+                {
+                    var serviceTable = featureLayer.FeatureTable as ServiceFeatureTable;
+                    var results = await serviceTable.ApplyEditsAsync(true);
+                }
+
+            }
+            catch (Exception exp)
+            {
+
+            }
+            finally
+            {
+                // get the map overlay element by name
+                var newSpotPopup = this.FindName("newSpotPopup") as FrameworkElement;
+
+                // hide the new spot popup
+                if (newSpotPopup != null)
+                {
+                    newSpotPopup.Visibility = System.Windows.Visibility.Hidden;
+                }
+            }
+        }
+
     }
 }

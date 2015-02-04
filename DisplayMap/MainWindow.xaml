@@ -6,21 +6,21 @@
 		Height="800" 
 		Width="1000">
 	<Grid>
-        <Border x:Name="CornerBorderMask" Background="White" CornerRadius="50"/>
-        
-        <!-- MapView -->
+		<Border x:Name="CornerBorderMask" Background="White" CornerRadius="50"/>
+		
+		<!-- MapView -->
 		<esri:MapView x:Name="MyMapView"
 					  LayerLoaded="MyMapView_LayerLoaded"
 					  MapViewTapped="MyMapView_MapViewTapped">
-            <!-- Map -->
-            <esri:Map>
-                <!-- Layers -->
-                <esri:ArcGISTiledMapServiceLayer ID="Basemap"
+			<!-- Map -->
+			<esri:Map>
+				<!-- Layers -->
+				<esri:ArcGISTiledMapServiceLayer ID="Basemap"
 					ServiceUri="http://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer"/>
-            </esri:Map>
-        </esri:MapView>
-        
-        
+			</esri:Map>
+		</esri:MapView>
+		
+		
 		<StackPanel Orientation="Vertical" Width="200" 
 				HorizontalAlignment="Left" VerticalAlignment="Top" 
 				Margin="20">

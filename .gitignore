@@ -3,3 +3,4 @@ DisplayMap/obj/Debug/
 *.suo
 Offline/obj/Debug/
 DisplayMap/bin/
+*.user
