@@ -1,0 +1,136 @@
+﻿<Window
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:esri="http://schemas.esri.com/arcgis/runtime/2013"        
+		xmlns:local="clr-namespace:Offline"
+		xmlns:System="clr-namespace:System;assembly=mscorlib" x:Class="Offline.MainWindow"
+		Title="MainWindow" 
+		Height="600" 
+		Width="800">
+    <Window.Resources>
+        <ResourceDictionary>
+        	<local:OnlineStatusConverter x:Key="connectedToImage"/>
+        	<BooleanToVisibilityConverter x:Key="boolToVisibility"/>
+        </ResourceDictionary>
+    </Window.Resources>
+	<Grid>
+		<esri:MapView x:Name="MyMapView"
+			LayerLoaded="MyMapView_LayerLoaded"
+			MapViewTapped="MyMapView_MapViewTapped">
+			<esri:MapView.Overlays>
+				<esri:OverlayItemsControl>
+					<Border x:Name="mapTip" Visibility="Collapsed"
+						Background="#CC000000" BorderThickness="1" BorderBrush="White" 
+						esri:ViewBase.ViewOverlayAnchor="{Binding Geometry}">
+						<StackPanel Margin="10">
+							<TextBlock Text="{Binding Attributes[Name]}"  FontWeight="Bold" FontSize="26" Foreground="White" />
+							<TextBlock Text="{Binding Attributes[City]}"  FontSize="16" Foreground="LightGoldenrodYellow" />
+						</StackPanel>
+					</Border>
+				</esri:OverlayItemsControl>
+			</esri:MapView.Overlays>
+			<esri:Map>
+				<esri:Map.InitialViewpoint>
+					<esri:ViewpointExtent XMin="-118.47" YMin="34.03" XMax="-118.26" YMax="34.13" SpatialReferenceID="4326"/>
+				</esri:Map.InitialViewpoint>
+				<esri:ArcGISTiledMapServiceLayer ID="Basemap"
+					ServiceUri="http://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer"/>
+				<esri:FeatureLayer ID="POI" >
+					<esri:ServiceFeatureTable ServiceUri="http://services2.arcgis.com/zLGtbpFgxhQlMMAY/arcgis/rest/services/POI/FeatureServer/0" />
+				</esri:FeatureLayer>
+			</esri:Map>
+		</esri:MapView>
+		<Canvas
+			Width="320" Height="300"
+			HorizontalAlignment="Left" VerticalAlignment="Bottom"
+			Margin="20,40" >
+			<Border x:Name="ToolsPanel" CornerRadius="10" 
+				Background="DarkGray" Opacity="0.85"
+				Width="320" Canvas.Top="0">
+				<StackPanel x:Name="Controls" 
+					Orientation="Vertical" 
+					Opacity="1"
+					Margin="10">
+					<StackPanel Orientation="Horizontal"
+						Height="35" Margin="0,0,0,5">
+						<CheckBox x:Name="OnlineCheckBox" 
+							Content="Online" 
+							VerticalAlignment="Center"
+							IsChecked="True"/>
+						<Image Width="35" Height="35"
+							Source="{Binding IsChecked, Converter={StaticResource connectedToImage}, ElementName=OnlineCheckBox}" 
+							Visibility="Visible"/>
+						<RadioButton x:Name="UseOnlineDataOption" Content="Online Data" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="30,0,0,0" IsChecked="True"/>
+						<RadioButton Content="Local Data" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10,0,0,0"/>
+					</StackPanel>
+					<StackPanel Orientation="Vertical">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="Local data: "/>
+							<TextBlock x:Name="LocalDataPathTextBlock" 
+								Text="&lt; none &gt;" 
+								Margin="10,0"/>
+						</StackPanel>
+						<StackPanel Orientation="Horizontal"
+							Margin="0,5">
+							<TextBlock Text="Local tiles: "/>
+							<TextBlock x:Name="LocalTilesPathTextBlock" 
+								Text="C:\Data\LA\Hollywood.tpk"
+								Margin="10,0"/>
+						</StackPanel>
+						<Button x:Name="GenerateLocalGeodatabaseButton" 
+							Click="GetDataButton_Click"
+							Content="Generate"
+							Width="90"
+							Margin="0,5" Height="25"/>
+						<StackPanel x:Name="StatusPanel" Orientation="Vertical" Visibility="Collapsed">
+							<ProgressBar x:Name="GenerateGdbProgressBar" 
+								IsIndeterminate="True" 
+								HorizontalAlignment="Left"
+								Visibility="Collapsed" 
+								Width="200" Height="10" />
+							<TextBlock x:Name="GenerateGdbStatusTextBlock" />
+						</StackPanel>
+					</StackPanel>
+					<Grid x:Name="EditControlsGrid" Margin="0,30,0,0">
+						<Grid.RowDefinitions>
+							<RowDefinition/>
+							<RowDefinition/>
+							<RowDefinition/>
+						</Grid.RowDefinitions>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="70"/>
+							<ColumnDefinition/>
+							<ColumnDefinition/>
+						</Grid.ColumnDefinitions>
+						<TextBlock Text="Name:" 
+							Grid.Column="0" Grid.Row="0"
+							Margin="5,0"
+							HorizontalAlignment="Right"/>
+						<TextBox x:Name="NameTextBox" 
+							Grid.Column="1" Grid.Row="0" 
+							Width="150" VerticalAlignment="Center"/>
+
+						<TextBlock Text="City:" 
+							Grid.Column="0" Grid.Row="1"
+							Margin="5,0"
+							HorizontalAlignment="Right"/>
+						<ComboBox x:Name="CityComboBox" VerticalAlignment="Center" Width="120" Grid.Row="1" Grid.Column="1" Margin="0,-0.001">
+							<System:String>Beverly Hills</System:String>
+							<System:String>Hollywood</System:String>
+                            <System:String>Malibu</System:String>
+							<System:String>Santa Monica</System:String>
+						</ComboBox>
+
+						<Button x:Name="AddNewSpotButton" 
+							Content="Add New"
+							Click="AddNewSpotButton_Click" 
+							Grid.Row="0" Grid.Column="2" Grid.RowSpan="2"
+							Width="80" Height="30"
+							HorizontalAlignment="Left" Margin="7,0,0,0"/>
+						<Button x:Name="SyncEditsButton" Content="Synchronize Edits" Grid.Column="1" HorizontalAlignment="Center" Margin="0,25,0,2" Grid.Row="2" VerticalAlignment="Top" Width="110" Height="25"/>
+					</Grid>
+				</StackPanel>
+			</Border>
+		</Canvas>
+	</Grid>
+</Window>
