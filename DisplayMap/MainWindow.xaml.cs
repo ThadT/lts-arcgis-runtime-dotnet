@@ -93,6 +93,7 @@ namespace DisplayMap
             catch (ArcGISWebException exp)
             {
                 MessageBox.Show("Unable to access item '" + webMapId + "'.");
+                return;
             }
 
             // check type: if the item is not a web map, return
