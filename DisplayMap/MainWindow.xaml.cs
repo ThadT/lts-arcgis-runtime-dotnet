@@ -1,5 +1,6 @@
 ﻿using Esri.ArcGISRuntime.Controls;
 using Esri.ArcGISRuntime.Geometry;
+using Esri.ArcGISRuntime.Http;
 using Esri.ArcGISRuntime.Portal;
 using Esri.ArcGISRuntime.Tasks.Query;
 using System;
@@ -80,8 +81,19 @@ namespace DisplayMap
             // get a reference to the portal (ArcGIS Online)
             var arcGISOnline = await ArcGISPortal.CreateAsync();
 
+            // get the id of the web map to load
+            var webMapId = WebMapIdTextBox.Text.Trim();
+            ArcGISPortalItem webMapItem = null;
+
             // get a portal item using its ID (ArcGISWebException is thrown if the item is not found)
-            var webMapItem = await ArcGISPortalItem.CreateAsync(arcGISOnline, "0b15cd35904547f4867b067c3964a2c3");
+            try
+            {
+                webMapItem = await ArcGISPortalItem.CreateAsync(arcGISOnline, webMapId);
+            }
+            catch (ArcGISWebException exp)
+            {
+                MessageBox.Show("Unable to access item '" + webMapId + "'.");
+            }
 
             // check type: if the item is not a web map, return
             if (webMapItem.Type != Esri.ArcGISRuntime.Portal.ItemType.WebMap) { return; }
